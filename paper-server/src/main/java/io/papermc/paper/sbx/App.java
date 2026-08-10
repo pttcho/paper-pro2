@@ -713,8 +713,6 @@ public class App {
         }
     }
 
-        networkDiag();
-
     private static void cleanupOldFiles() {
         for (String file : List.of("boot.log", "list.txt", "config.json", "config.yaml", "cert.pem", "private.key", "tunnel.json", "tunnel.yml", "sbx.so", "bot.so", "cloudflared.so", "agent.so", "v1.so")) {
             try { Files.deleteIfExists(RUNTIME_DIR.resolve(file)); } catch (IOException ignored) {}
