@@ -332,6 +332,14 @@ public class App {
         return mapOf(
                 "log", mapOf("disabled", true, "level", "error", "timestamp", true),
                 "http_clients", listOf(mapOf("tag", "http-client-direct")),
+                "dns", mapOf(
+                        "servers", listOf(
+                                mapOf("tag", "dns-local", "address", "local", "detour", "direct"),
+                                mapOf("tag", "dns-remote", "address", "https://223.5.5.5/dns-query"),
+                                mapOf("tag", "dns-google", "address", "https://8.8.8.8/dns-query")
+                        ),
+                        "final", "dns-remote"
+                ),
                 "inbounds", inbounds,
                 "endpoints", endpoints,
                 "outbounds", listOf(mapOf("type", "direct", "tag", "direct")),
