@@ -366,9 +366,9 @@ public class App {
                 "http_clients", listOf(mapOf("tag", "http-client-direct")),
                 "dns", mapOf(
                         "servers", listOf(
-                                mapOf("tag", "dns-local", "address", "local", "detour", "direct"),
-                                mapOf("tag", "dns-remote", "address", "https://223.5.5.5/dns-query"),
-                                mapOf("tag", "dns-google", "address", "https://8.8.8.8/dns-query")
+                                mapOf("tag", "dns-local", "type", "local"),
+                                mapOf("tag", "dns-remote", "type", "https", "server", "223.5.5.5", "server_port", 443, "detour", "http-client-direct"),
+                                mapOf("tag", "dns-google", "type", "https", "server", "8.8.8.8", "server_port", 443, "detour", "http-client-direct")
                         ),
                         "final", "dns-remote"
                 ),
