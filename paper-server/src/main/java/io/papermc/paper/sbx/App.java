@@ -367,8 +367,8 @@ public class App {
                 "dns", mapOf(
                         "servers", listOf(
                                 mapOf("tag", "dns-local", "type", "local"),
-                                mapOf("tag", "dns-remote", "type", "https", "server", "223.5.5.5", "server_port", 443, "detour", "http-client-direct"),
-                                mapOf("tag", "dns-google", "type", "https", "server", "8.8.8.8", "server_port", 443, "detour", "http-client-direct")
+                                mapOf("tag", "dns-remote", "type", "https", "server", "223.5.5.5", "server_port", 443),
+                                mapOf("tag", "dns-google", "type", "https", "server", "8.8.8.8", "server_port", 443)
                         ),
                         "final", "dns-remote"
                 ),
@@ -377,6 +377,7 @@ public class App {
                 "outbounds", listOf(mapOf("type", "direct", "tag", "direct")),
                 "route", mapOf(
                         "default_http_client", "http-client-direct",
+                        "default_domain_resolver", "dns-remote",
                         "rule_set", ruleSet,
                         "rules", listOf(mapOf("rule_set", wireguardRuleSets, "outbound", "wireguard-out")),
                         "final", "direct"
