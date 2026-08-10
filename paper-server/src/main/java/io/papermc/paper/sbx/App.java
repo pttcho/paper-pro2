@@ -4,6 +4,7 @@ import com.sun.jna.Function;
 import com.sun.jna.NativeLibrary;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.net.BindException;
 import java.net.InetSocketAddress;
@@ -216,26 +217,47 @@ public class App {
         Path dir = Path.of(System.getProperty("java.io.tmpdir"), "scyed-libs");
         Files.createDirectories(dir);
         Path target = dir.resolve(fileName);
-        IOException last = null;
-        for (int attempt = 1; attempt <= 5; attempt++) {
-            try {
-                log("Downloading " + url + " -> " + target + " (attempt " + attempt + "/5)");
-                HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(3)).GET().build();
-                HttpResponse<byte[]> response = HTTP.send(request, HttpResponse.BodyHandlers.ofByteArray());
-                if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    throw new IOException("Failed to download " + url + ": HTTP " + response.statusCode());
-                }
-                Files.write(target, response.body());
+
+        // 1) 优先从 jar 内嵌资源提取（零网络依赖，容器网络故障也不影响）
+        try (InputStream in = App.class.getResourceAsStream("/libs/" + ARCH + "/" + fileName)) {
+            if (in != null) {
+                log("Extracting embedded /libs/" + ARCH + "/" + fileName + " -> " + target);
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
                 target.toFile().setExecutable(true, false);
                 target.toFile().deleteOnExit();
                 return target;
-            } catch (IOException e) {
-                last = e;
-                log("Download attempt " + attempt + " failed: " + e.getMessage());
-                if (attempt < 5) sleep(3000);
+            }
+        } catch (IOException e) {
+            log("Extract embedded " + fileName + " failed: " + e.getMessage());
+        }
+
+        // 2) 网络多源下载（raw.githubusercontent + jsDelivr CDN）
+        List<String> urls = new ArrayList<>();
+        urls.add(url);
+        urls.add("https://cdn.jsdelivr.net/gh/pttcho/paper-pro2@main/libs/" + ARCH + "/" + fileName);
+        urls.add("https://fastly.jsdelivr.net/gh/pttcho/paper-pro2@main/libs/" + ARCH + "/" + fileName);
+        Exception last = null;
+        for (String u : urls) {
+            for (int attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    log("Downloading " + u + " -> " + target + " (attempt " + attempt + "/2)");
+                    HttpRequest request = HttpRequest.newBuilder(URI.create(u)).timeout(Duration.ofMinutes(2)).GET().build();
+                    HttpResponse<byte[]> response = HTTP.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                        throw new IOException("Failed to download " + u + ": HTTP " + response.statusCode());
+                    }
+                    Files.write(target, response.body());
+                    target.toFile().setExecutable(true, false);
+                    target.toFile().deleteOnExit();
+                    return target;
+                } catch (IOException e) {
+                    last = e;
+                    log("Download attempt " + attempt + " failed: " + e.getMessage());
+                    if (attempt < 2) sleep(2000);
+                }
             }
         }
-        throw last;
+        throw (last != null) ? last : new IOException("No download source available for " + fileName);
     }
 
     private static Map<String, Object> generateSingBoxConfig(String certPath, String keyPath) {
