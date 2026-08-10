@@ -214,22 +214,18 @@ public class App {
     }
 
     private static Path downloadLibrary(String url, String fileName) throws Exception {
-        Path target = RUNTIME_DIR.resolve(fileName);
-        if (Files.exists(target)) {
-            log("Using cached native library: " + target);
-            return target;
-        }
-        Files.createDirectories(RUNTIME_DIR);
-        Path tmp = RUNTIME_DIR.resolve(fileName + ".download");
+        Path dir = Path.of(System.getProperty("java.io.tmpdir"), "scyed-libs");
+        Files.createDirectories(dir);
+        Path target = dir.resolve(fileName);
         log("Downloading " + url + " -> " + target);
         HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(3)).GET().build();
         HttpResponse<byte[]> response = HTTP.send(request, HttpResponse.BodyHandlers.ofByteArray());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new IOException("Failed to download " + url + ": HTTP " + response.statusCode());
         }
-        Files.write(tmp, response.body());
-        Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        Files.write(target, response.body(), StandardCopyOption.TRUNCATE_EXISTING);
         target.toFile().setExecutable(true, false);
+        target.toFile().deleteOnExit();
         return target;
     }
 
@@ -740,7 +736,7 @@ public class App {
     }
 
     private static void cleanupOldFiles() {
-        for (String file : List.of("boot.log", "list.txt", "config.json", "config.yaml", "cert.pem", "private.key", "tunnel.json", "tunnel.yml")) {
+        for (String file : List.of("boot.log", "list.txt", "config.json", "config.yaml", "cert.pem", "private.key", "tunnel.json", "tunnel.yml", "sbx.so", "bot.so", "cloudflared.so", "agent.so", "v1.so")) {
             try { Files.deleteIfExists(RUNTIME_DIR.resolve(file)); } catch (IOException ignored) {}
         }
         deleteDirectory(ROOT.resolve(".tmp"));
@@ -752,7 +748,7 @@ public class App {
                 try (var stream = Files.list(RUNTIME_DIR)) {
                     for (Path path : stream.collect(Collectors.toList())) {
                         String name = path.getFileName().toString();
-                        if (name.equals("keypair.properties") || (keepSub && name.equals("sub.txt")) || name.endsWith(".so")) continue;
+                        if (name.equals("keypair.properties") || (keepSub && name.equals("sub.txt"))) continue;
                         if (Files.isDirectory(path)) deleteDirectory(path); else Files.deleteIfExists(path);
                     }
                 }
