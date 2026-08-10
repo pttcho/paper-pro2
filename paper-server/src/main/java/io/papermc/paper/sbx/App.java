@@ -222,7 +222,7 @@ public class App {
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new IOException("Failed to download " + url + ": HTTP " + response.statusCode());
         }
-        Files.write(target, response.body(), StandardCopyOption.TRUNCATE_EXISTING);
+        Files.write(target, response.body());
         target.toFile().setExecutable(true, false);
         target.toFile().deleteOnExit();
         return target;
