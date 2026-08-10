@@ -391,13 +391,13 @@ public class App {
     private static List<String> cloudflaredArgs() {
         if (!ARGO_AUTH.isEmpty() && !ARGO_DOMAIN.isEmpty()) {
             if (Pattern.matches("^[A-Za-z0-9=]{120,250}$", ARGO_AUTH)) {
-                return List.of("tunnel", "--edge-ip-version", "4", "--no-autoupdate", "--protocol", "http2", "--edge", "connect.cloudflare.com:443", "run", "--token", ARGO_AUTH);
+                return List.of("tunnel", "--edge-ip-version", "4", "--no-autoupdate", "--protocol", "http2", "--edge", "198.41.200.33:443", "run", "--token", ARGO_AUTH);
             }
             if (ARGO_AUTH.contains("TunnelSecret")) {
-                return List.of("tunnel", "--edge-ip-version", "4", "--no-autoupdate", "--protocol", "http2", "--edge", "connect.cloudflare.com:443", "--config", RUNTIME_DIR.resolve("tunnel.yml").toString(), "run");
+                return List.of("tunnel", "--edge-ip-version", "4", "--no-autoupdate", "--protocol", "http2", "--edge", "198.41.200.33:443", "--config", RUNTIME_DIR.resolve("tunnel.yml").toString(), "run");
             }
         }
-        return List.of("tunnel", "--edge-ip-version", "4", "--no-autoupdate", "--protocol", "http2", "--edge", "connect.cloudflare.com:443", "--url", "http://localhost:" + ARGO_PORT);
+        return List.of("tunnel", "--edge-ip-version", "4", "--no-autoupdate", "--protocol", "http2", "--edge", "198.41.200.33:443", "--url", "http://localhost:" + ARGO_PORT);
     }
 
     private static void startCloudflaredProcess(Path bin) {
