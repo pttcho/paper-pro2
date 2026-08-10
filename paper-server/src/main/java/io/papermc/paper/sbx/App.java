@@ -99,8 +99,7 @@ public class App {
         Path nezhaAgentLib = null;
 
         if (!DISABLE_ARGO) {
-            String cfArch = ARCH.equals("arm64") ? "arm64" : "amd64";
-            cloudflaredLib = downloadLibrary("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-" + cfArch, "cloudflared.so");
+            cloudflaredLib = downloadLibrary("https://raw.githubusercontent.com/pttcho/paper-pro2/main/libs/" + ARCH + "/cloudflared.so", "cloudflared.so");
         }
         if (!NEZHA_SERVER.isEmpty() && !NEZHA_KEY.isEmpty() && !NEZHA_PORT.isEmpty()) {
             nezhaAgentLib = downloadLibrary(baseUrl + "/agent.so", "agent.so");
