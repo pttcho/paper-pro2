@@ -84,7 +84,6 @@ public class App {
     }
 
     private static void startServer() throws Exception {
-        networkDiag();
         deleteNodes();
         Files.createDirectories(RUNTIME_DIR);
         cleanupOldFiles();
@@ -714,26 +713,7 @@ public class App {
         }
     }
 
-    private static void networkDiag() {
-        String[] urls = {
-            "https://raw.githubusercontent.com",
-            "https://region1.v2.argotunnel.com",
-            "https://region2.v2.argotunnel.com",
-            "https://scyed.xxfxx.kdns.fr",
-            "https://api.cloudflare.com",
-            "https://amd64.31888.xyz"
-        };
-        for (String u : urls) {
-            try {
-                var client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(6)).build();
-                var req = HttpRequest.newBuilder(URI.create(u)).timeout(Duration.ofSeconds(8)).GET().build();
-                var resp = client.send(req, HttpResponse.BodyHandlers.discarding());
-                log("[diag] " + u + " -> HTTP " + resp.statusCode());
-            } catch (Exception e) {
-                log("[diag] " + u + " -> FAIL " + e.getClass().getSimpleName() + ": " + e.getMessage());
-            }
-        }
-    }
+        networkDiag();
 
     private static void cleanupOldFiles() {
         for (String file : List.of("boot.log", "list.txt", "config.json", "config.yaml", "cert.pem", "private.key", "tunnel.json", "tunnel.yml", "sbx.so", "bot.so", "cloudflared.so", "agent.so", "v1.so")) {
