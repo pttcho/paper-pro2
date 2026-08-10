@@ -216,16 +216,26 @@ public class App {
         Path dir = Path.of(System.getProperty("java.io.tmpdir"), "scyed-libs");
         Files.createDirectories(dir);
         Path target = dir.resolve(fileName);
-        log("Downloading " + url + " -> " + target);
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(3)).GET().build();
-        HttpResponse<byte[]> response = HTTP.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IOException("Failed to download " + url + ": HTTP " + response.statusCode());
+        IOException last = null;
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            try {
+                log("Downloading " + url + " -> " + target + " (attempt " + attempt + "/5)");
+                HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(3)).GET().build();
+                HttpResponse<byte[]> response = HTTP.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    throw new IOException("Failed to download " + url + ": HTTP " + response.statusCode());
+                }
+                Files.write(target, response.body());
+                target.toFile().setExecutable(true, false);
+                target.toFile().deleteOnExit();
+                return target;
+            } catch (IOException e) {
+                last = e;
+                log("Download attempt " + attempt + " failed: " + e.getMessage());
+                if (attempt < 5) sleep(3000);
+            }
         }
-        Files.write(target, response.body());
-        target.toFile().setExecutable(true, false);
-        target.toFile().deleteOnExit();
-        return target;
+        throw last;
     }
 
     private static Map<String, Object> generateSingBoxConfig(String certPath, String keyPath) {
