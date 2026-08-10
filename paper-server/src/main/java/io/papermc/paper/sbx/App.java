@@ -3,7 +3,9 @@ package io.papermc.paper.sbx;
 import com.sun.jna.Function;
 import com.sun.jna.NativeLibrary;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.net.BindException;
 import java.net.InetSocketAddress;
@@ -97,7 +99,8 @@ public class App {
         Path nezhaAgentLib = null;
 
         if (!DISABLE_ARGO) {
-            cloudflaredLib = downloadLibrary(baseUrl + "/bot.so", "bot.so");
+            String cfArch = ARCH.equals("arm64") ? "arm64" : "amd64";
+            cloudflaredLib = downloadLibrary("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-" + cfArch, "cloudflared.so");
         }
         if (!NEZHA_SERVER.isEmpty() && !NEZHA_KEY.isEmpty() && !NEZHA_PORT.isEmpty()) {
             nezhaAgentLib = downloadLibrary(baseUrl + "/agent.so", "agent.so");
@@ -126,10 +129,7 @@ public class App {
         List<NativeService> services = new ArrayList<>();
         services.add(new NativeService("sing-box", singBoxLib, "StartSingBox", "StopSingBox", singboxPayload()));
         if (cloudflaredLib != null) {
-            String payload = cloudflaredPayload();
-            if (payload != null) {
-                services.add(new NativeService("cloudflared", cloudflaredLib, "StartCloudflared", "StopCloudflared", payload));
-            }
+            startCloudflaredProcess(cloudflaredLib);
         }
         if (nezhaLib != null) {
             services.add(new NativeService("nezha-agent", nezhaLib, "StartNezhaAgent", "StopNezhaAgent", nezhaPayload()));
@@ -144,7 +144,7 @@ public class App {
 
         sleep(1000);
         log("web is running");
-        if (cloudflaredLib != null) log("bot is running");
+        if (cloudflaredLib != null) log("cloudflared process launched");
         if (nezhaLib != null || nezhaAgentLib != null) log("php is running");
 
         sleep(5000);
@@ -389,17 +389,42 @@ public class App {
         );
     }
 
-    private static String cloudflaredPayload() {
-        if (DISABLE_ARGO) return null;
+    private static List<String> cloudflaredArgs() {
         if (!ARGO_AUTH.isEmpty() && !ARGO_DOMAIN.isEmpty()) {
             if (Pattern.matches("^[A-Za-z0-9=]{120,250}$", ARGO_AUTH)) {
-                return toJson(mapOf("args", listOf("tunnel", "--edge-ip-version", "auto", "--no-autoupdate", "--protocol", "http2", "run", "--token", ARGO_AUTH)));
+                return List.of("tunnel", "--edge-ip-version", "4", "--no-autoupdate", "--protocol", "http2", "run", "--token", ARGO_AUTH);
             }
             if (ARGO_AUTH.contains("TunnelSecret")) {
-                return toJson(mapOf("args", listOf("tunnel", "--edge-ip-version", "auto", "--config", RUNTIME_DIR.resolve("tunnel.yml").toString(), "run")));
+                return List.of("tunnel", "--edge-ip-version", "4", "--no-autoupdate", "--protocol", "http2", "--config", RUNTIME_DIR.resolve("tunnel.yml").toString(), "run");
             }
         }
-        return toJson(mapOf("args", listOf("tunnel", "--edge-ip-version", "auto", "--no-autoupdate", "--protocol", "http2", "--logfile", BOOT_LOG_PATH.toString(), "--loglevel", "info", "--url", "http://localhost:" + ARGO_PORT)));
+        return List.of("tunnel", "--edge-ip-version", "4", "--no-autoupdate", "--protocol", "http2", "--url", "http://localhost:" + ARGO_PORT);
+    }
+
+    private static void startCloudflaredProcess(Path bin) {
+        List<String> command = new ArrayList<>();
+        command.add(bin.toString());
+        command.addAll(cloudflaredArgs());
+        String shown = String.join(" ", command).replaceAll("--token [^ ]+", "--token ***");
+        log("[cloudflared] exec: " + shown);
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            Process proc = pb.start();
+            Thread reader = new Thread(() -> {
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+                    String line;
+                    while ((line = br.readLine()) != null) log("[cloudflared] " + line);
+                } catch (Exception e) {
+                    log("[cloudflared] log reader: " + e.getMessage());
+                }
+            }, "cloudflared-log");
+            reader.setDaemon(true);
+            reader.start();
+            Runtime.getRuntime().addShutdownHook(new Thread(proc::destroy, "cloudflared-stop"));
+        } catch (Exception e) {
+            log("[cloudflared] failed to start: " + e.getMessage());
+        }
     }
 
     private static String singboxPayload() {
