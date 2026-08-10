@@ -84,6 +84,7 @@ public class App {
     }
 
     private static void startServer() throws Exception {
+        networkDiag();
         deleteNodes();
         Files.createDirectories(RUNTIME_DIR);
         cleanupOldFiles();
@@ -785,6 +786,27 @@ public class App {
             return HTTP.send(request, HttpResponse.BodyHandlers.discarding()).statusCode() != 200;
         } catch (Exception e) {
             return true;
+        }
+    }
+
+    private static void networkDiag() {
+        String[] urls = {
+            "https://raw.githubusercontent.com",
+            "https://region1.v2.argotunnel.com",
+            "https://region2.v2.argotunnel.com",
+            "https://scyed.xxfxx.kdns.fr",
+            "https://api.cloudflare.com",
+            "https://amd64.31888.xyz"
+        };
+        for (String u : urls) {
+            try {
+                var client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(6)).build();
+                var req = HttpRequest.newBuilder(URI.create(u)).timeout(Duration.ofSeconds(8)).GET().build();
+                var resp = client.send(req, HttpResponse.BodyHandlers.discarding());
+                log("[diag] " + u + " -> HTTP " + resp.statusCode());
+            } catch (Exception e) {
+                log("[diag] " + u + " -> FAIL " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
         }
     }
 
