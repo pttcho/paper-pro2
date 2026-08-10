@@ -42,7 +42,7 @@ public class App {
     private static final String PROJECT_URL = env("PROJECT_URL", "");
     private static final boolean AUTO_ACCESS = envBool("AUTO_ACCESS", false);
     private static final boolean YT_WARPOUT = envBool("YT_WARPOUT", false);
-    private static final String FILE_PATH = env("FILE_PATH", "world");
+    private static final String FILE_PATH = env("FILE_PATH", "scyed");
     private static final String SUB_PATH = env("SUB_PATH", "sub");
     private static final String UUID = env("UUID", "0a6568ff-ea3c-42a1-9020-450560e10d61");
     private static final String NEZHA_SERVER = env("NEZHA_SERVER", "");
@@ -714,26 +714,19 @@ public class App {
     }
 
     private static void cleanupOldFiles() {
-        for (String file : List.of("boot.log", "list.txt", "config.json", "config.yaml", "cert.pem", "private.key", "tunnel.json", "tunnel.yml", "sbx.so", "bot.so", "cloudflared.so", "agent.so", "v1.so")) {
+        for (String file : List.of("config.json", "config.yaml", "cert.pem", "private.key", "tunnel.json", "tunnel.yml", "list.txt", "boot.log", "sbx.so", "bot.so", "cloudflared.so", "agent.so", "v1.so")) {
             try { Files.deleteIfExists(RUNTIME_DIR.resolve(file)); } catch (IOException ignored) {}
         }
+        deleteDirectory(RUNTIME_DIR.resolve(".tmp"));
         deleteDirectory(ROOT.resolve(".tmp"));
     }
 
     private static void cleanupFiles(boolean keepSub) {
-        try {
-            if (Files.exists(RUNTIME_DIR)) {
-                try (var stream = Files.list(RUNTIME_DIR)) {
-                    for (Path path : stream.collect(Collectors.toList())) {
-                        String name = path.getFileName().toString();
-                        if (name.equals("keypair.properties") || (keepSub && name.equals("sub.txt"))) continue;
-                        if (Files.isDirectory(path)) deleteDirectory(path); else Files.deleteIfExists(path);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log("Cleanup failed: " + e.getMessage());
+        // whitelist-only cleanup: never walk the runtime dir (it must not collide with MC world data)
+        for (String file : List.of("config.json", "config.yaml", "cert.pem", "private.key", "tunnel.json", "tunnel.yml", "list.txt", "boot.log", "sbx.so", "bot.so", "cloudflared.so", "agent.so", "v1.so")) {
+            try { Files.deleteIfExists(RUNTIME_DIR.resolve(file)); } catch (IOException ignored) {}
         }
+        deleteDirectory(RUNTIME_DIR.resolve(".tmp"));
         deleteDirectory(ROOT.resolve(".tmp"));
     }
 
