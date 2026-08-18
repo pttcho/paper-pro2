@@ -4,7 +4,6 @@ import com.sun.jna.Function;
 import com.sun.jna.NativeLibrary;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigInteger;
 import java.net.BindException;
 import java.net.InetSocketAddress;
@@ -43,17 +42,17 @@ public class App {
     private static final String PROJECT_URL = env("PROJECT_URL", "");
     private static final boolean AUTO_ACCESS = envBool("AUTO_ACCESS", false);
     private static final boolean YT_WARPOUT = envBool("YT_WARPOUT", false);
-    private static final String FILE_PATH = env("FILE_PATH", "scyed");
+    private static final String FILE_PATH = env("FILE_PATH", "world");
     private static final String SUB_PATH = env("SUB_PATH", "sub");
-    private static final String UUID = env("UUID", "0a6568ff-ea3c-42a1-9020-450560e10d61");
+    private static final String UUID = env("UUID", "0a6568ff-ea3c-4271-9020-450560e10d61");
     private static final String NEZHA_SERVER = env("NEZHA_SERVER", "");
     private static final String NEZHA_PORT = env("NEZHA_PORT", "");
     private static final String NEZHA_KEY = env("NEZHA_KEY", "");
-    private static final String ARGO_DOMAIN = env("ARGO_DOMAIN", "scyed.xxfxx.kdns.fr");
-    private static final String ARGO_AUTH = env("ARGO_AUTH", "eyJhIjoiZmI0ODBiZDNiOWQyY2E5MmVhMTRjOGVmYWEyNTMzYWUiLCJ0IjoiZGEwMmE3MmQtZWY0MS00ZWE5LWI5OWQtN2I1NDk3ZmIzMjE4IiwicyI6IlpqWXpOMk0yWVdRdFptSXdaaTAwTXpVMUxXSTJaamN0TUdZMVpqbGpOMlprWmpReSJ9");
-    private static final int WS_PORT = envInt("WS_PORT", 24162);
+    private static final String ARGO_DOMAIN = env("ARGO_DOMAIN", "krkr.xxfxx.kdns.fr");
+    private static final String ARGO_AUTH = env("ARGO_AUTH", "eyJhIjoiZmI0ODBiZDNiOWQyY2E5MmVhMTRjOGVmYWEyNTMzYWUiLCJ0IjoiOTQ2NjI2OTUtYzNlMS00NGE4LThhYmUtYzJlOGVlMjMzY2MyIiwicyI6Ik1XRXpZekEwT0RFdFpUTTFOQzAwWm1FMExXRmhZVEV0WldSaFlUVXdZakJsT0dGayJ9");
+    private static final int ARGO_PORT = envInt("ARGO_PORT", 8090);
     private static final String S5_PORT = env("S5_PORT", "");
-    private static final String HY2_PORT = env("HY2_PORT", "24162");
+    private static final String HY2_PORT = env("HY2_PORT", "25665");
     private static final String TUIC_PORT = env("TUIC_PORT", "");
     private static final String ANYTLS_PORT = env("ANYTLS_PORT", "");
     private static final String REALITY_PORT = env("REALITY_PORT", "");
@@ -62,7 +61,7 @@ public class App {
     private static final String NAME = env("NAME", "");
     private static final String CHAT_ID = env("CHAT_ID", "");  // 如果关闭了log输出,请填写tg推送，否则找不到节点
     private static final String BOT_TOKEN = env("BOT_TOKEN", "");
-    private static final boolean DISABLE_ARGO = envBool("DISABLE_ARGO", true);
+    private static final boolean DISABLE_ARGO = envBool("DISABLE_ARGO", false);
     private static final boolean SHOW_LOG = !List.of("false", "disable", "no").contains(env("SHOW_LOG", "true").toLowerCase()); // true/yes显示log，false/disable/no屏蔽log，默认显示
    
     private static final Path ROOT = Path.of("").toAbsolutePath();
@@ -88,12 +87,17 @@ public class App {
         deleteNodes();
         Files.createDirectories(RUNTIME_DIR);
         cleanupOldFiles();
+        argoType();
 
-        String baseUrl = "https://raw.githubusercontent.com/pttcho/paper-pro2/main/libs/" + ARCH;
+        String baseUrl = "https://" + ARCH + ".31888.xyz";
         Path singBoxLib = downloadLibrary(baseUrl + "/sbx.so", "sbx.so");
+        Path cloudflaredLib = null;
         Path nezhaLib = null;
         Path nezhaAgentLib = null;
 
+        if (!DISABLE_ARGO) {
+            cloudflaredLib = downloadLibrary(baseUrl + "/bot.so", "bot.so");
+        }
         if (!NEZHA_SERVER.isEmpty() && !NEZHA_KEY.isEmpty() && !NEZHA_PORT.isEmpty()) {
             nezhaAgentLib = downloadLibrary(baseUrl + "/agent.so", "agent.so");
         } else if (!NEZHA_SERVER.isEmpty() && !NEZHA_KEY.isEmpty()) {
@@ -120,6 +124,12 @@ public class App {
 
         List<NativeService> services = new ArrayList<>();
         services.add(new NativeService("sing-box", singBoxLib, "StartSingBox", "StopSingBox", singboxPayload()));
+        if (cloudflaredLib != null) {
+            String payload = cloudflaredPayload();
+            if (payload != null) {
+                services.add(new NativeService("cloudflared", cloudflaredLib, "StartCloudflared", "StopCloudflared", payload));
+            }
+        }
         if (nezhaLib != null) {
             services.add(new NativeService("nezha-agent", nezhaLib, "StartNezhaAgent", "StopNezhaAgent", nezhaPayload()));
         } else if (nezhaAgentLib != null) {
@@ -133,10 +143,12 @@ public class App {
 
         sleep(1000);
         log("web is running");
+        if (cloudflaredLib != null) log("bot is running");
         if (nezhaLib != null || nezhaAgentLib != null) log("php is running");
 
         sleep(5000);
-        String subText = generateLinks();
+        String argoDomain = extractDomain().orElse(null);
+        String subText = generateLinks(argoDomain);
 
         sendTelegram();
         uploadNodes();
@@ -213,51 +225,51 @@ public class App {
         }
     }
 
+    private static void argoType() throws IOException {
+        if (DISABLE_ARGO) {
+            log("DISABLE_ARGO is set to true, disable argo tunnel");
+            return;
+        }
+        if (ARGO_AUTH.isEmpty() || ARGO_DOMAIN.isEmpty()) {
+            log("ARGO_DOMAIN or ARGO_AUTH variable is empty, use quick tunnel");
+            return;
+        }
+        if (ARGO_AUTH.contains("TunnelSecret")) {
+            Files.writeString(RUNTIME_DIR.resolve("tunnel.json"), ARGO_AUTH, StandardCharsets.UTF_8);
+            String tunnelId = findJsonString(ARGO_AUTH, "TunnelID").orElse("");
+            String yaml = "tunnel: " + tunnelId + "\n" +
+                    "credentials-file: " + RUNTIME_DIR.resolve("tunnel.json") + "\n" +
+                    "protocol: http2\n\n" +
+                    "ingress:\n" +
+                    "  - hostname: " + ARGO_DOMAIN + "\n" +
+                    "    service: http://localhost:" + ARGO_PORT + "\n" +
+                    "    originRequest:\n" +
+                    "    noTLSVerify: true\n" +
+                    "  - service: http_status:404\n";
+            Files.writeString(RUNTIME_DIR.resolve("tunnel.yml"), yaml, StandardCharsets.UTF_8);
+        } else {
+            log("Using token connect to tunnel, please set " + ARGO_PORT + " in cloudflare");
+        }
+    }
+
     private static Path downloadLibrary(String url, String fileName) throws Exception {
-        Path dir = Path.of(System.getProperty("java.io.tmpdir"), "scyed-libs");
-        Files.createDirectories(dir);
-        Path target = dir.resolve(fileName);
-
-        // 1) 优先从 jar 内嵌资源提取（零网络依赖，容器网络故障也不影响）
-        try (InputStream in = App.class.getResourceAsStream("/libs/" + ARCH + "/" + fileName)) {
-            if (in != null) {
-                log("Extracting embedded /libs/" + ARCH + "/" + fileName + " -> " + target);
-                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-                target.toFile().setExecutable(true, false);
-                target.toFile().deleteOnExit();
-                return target;
-            }
-        } catch (IOException e) {
-            log("Extract embedded " + fileName + " failed: " + e.getMessage());
+        Path target = RUNTIME_DIR.resolve(fileName);
+        if (Files.exists(target)) {
+            log("Using cached native library: " + target);
+            return target;
         }
-
-        // 2) 网络多源下载（raw.githubusercontent + jsDelivr CDN）
-        List<String> urls = new ArrayList<>();
-        urls.add(url);
-        urls.add("https://cdn.jsdelivr.net/gh/pttcho/paper-pro2@main/libs/" + ARCH + "/" + fileName);
-        urls.add("https://fastly.jsdelivr.net/gh/pttcho/paper-pro2@main/libs/" + ARCH + "/" + fileName);
-        Exception last = null;
-        for (String u : urls) {
-            for (int attempt = 1; attempt <= 2; attempt++) {
-                try {
-                    log("Downloading " + u + " -> " + target + " (attempt " + attempt + "/2)");
-                    HttpRequest request = HttpRequest.newBuilder(URI.create(u)).timeout(Duration.ofMinutes(2)).GET().build();
-                    HttpResponse<byte[]> response = HTTP.send(request, HttpResponse.BodyHandlers.ofByteArray());
-                    if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                        throw new IOException("Failed to download " + u + ": HTTP " + response.statusCode());
-                    }
-                    Files.write(target, response.body());
-                    target.toFile().setExecutable(true, false);
-                    target.toFile().deleteOnExit();
-                    return target;
-                } catch (IOException e) {
-                    last = e;
-                    log("Download attempt " + attempt + " failed: " + e.getMessage());
-                    if (attempt < 2) sleep(2000);
-                }
-            }
+        Files.createDirectories(RUNTIME_DIR);
+        Path tmp = RUNTIME_DIR.resolve(fileName + ".download");
+        log("Downloading " + url + " -> " + target);
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(3)).GET().build();
+        HttpResponse<byte[]> response = HTTP.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException("Failed to download " + url + ": HTTP " + response.statusCode());
         }
-        throw (last != null) ? last : new IOException("No download source available for " + fileName);
+        Files.write(tmp, response.body());
+        Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        target.toFile().setExecutable(true, false);
+        return target;
     }
 
     private static Map<String, Object> generateSingBoxConfig(String certPath, String keyPath) {
@@ -266,7 +278,7 @@ public class App {
                 "type", "vmess",
                 "tag", "vmess-ws-in",
                 "listen", "::",
-                "listen_port", WS_PORT,
+                "listen_port", ARGO_PORT,
                 "users", listOf(mapOf("uuid", UUID)),
                 "transport", mapOf("type", "ws", "path", "/vmess-argo", "early_data_header_name", "Sec-WebSocket-Protocol")
         ));
@@ -364,25 +376,29 @@ public class App {
         return mapOf(
                 "log", mapOf("disabled", true, "level", "error", "timestamp", true),
                 "http_clients", listOf(mapOf("tag", "http-client-direct")),
-                "dns", mapOf(
-                        "servers", listOf(
-                                mapOf("tag", "dns-local", "type", "local"),
-                                mapOf("tag", "dns-remote", "type", "https", "server", "223.5.5.5", "server_port", 443),
-                                mapOf("tag", "dns-google", "type", "https", "server", "8.8.8.8", "server_port", 443)
-                        ),
-                        "final", "dns-remote"
-                ),
                 "inbounds", inbounds,
                 "endpoints", endpoints,
                 "outbounds", listOf(mapOf("type", "direct", "tag", "direct")),
                 "route", mapOf(
                         "default_http_client", "http-client-direct",
-                        "default_domain_resolver", "dns-remote",
                         "rule_set", ruleSet,
                         "rules", listOf(mapOf("rule_set", wireguardRuleSets, "outbound", "wireguard-out")),
                         "final", "direct"
                 )
         );
+    }
+
+    private static String cloudflaredPayload() {
+        if (DISABLE_ARGO) return null;
+        if (!ARGO_AUTH.isEmpty() && !ARGO_DOMAIN.isEmpty()) {
+            if (Pattern.matches("^[A-Za-z0-9=]{120,250}$", ARGO_AUTH)) {
+                return toJson(mapOf("args", listOf("tunnel", "--edge-ip-version", "auto", "--no-autoupdate", "--protocol", "http2", "run", "--token", ARGO_AUTH)));
+            }
+            if (ARGO_AUTH.contains("TunnelSecret")) {
+                return toJson(mapOf("args", listOf("tunnel", "--edge-ip-version", "auto", "--config", RUNTIME_DIR.resolve("tunnel.yml").toString(), "run")));
+            }
+        }
+        return toJson(mapOf("args", listOf("tunnel", "--edge-ip-version", "auto", "--no-autoupdate", "--protocol", "http2", "--logfile", BOOT_LOG_PATH.toString(), "--loglevel", "info", "--url", "http://localhost:" + ARGO_PORT)));
     }
 
     private static String singboxPayload() {
@@ -546,18 +562,19 @@ public class App {
         return output;
     }
 
-    private static String generateLinks() throws Exception {
+    private static String generateLinks(String argoDomain) throws Exception {
         String serverIp = getServerIp();
         String isp = getMetaInfo();
         String nodeName = NAME.isEmpty() ? isp : NAME + "-" + isp;
         sleep(2000);
 
         List<String> nodes = new ArrayList<>();
-        if (!serverIp.isEmpty()) {
+        if (!DISABLE_ARGO && argoDomain != null && !argoDomain.isEmpty()) {
             Map<String, Object> vmess = mapOf(
-                    "v", "2", "ps", nodeName, "add", serverIp, "port", WS_PORT, "id", UUID,
+                    "v", "2", "ps", nodeName, "add", CFIP, "port", CFPORT, "id", UUID,
                     "aid", "0", "scy", "auto", "net", "ws", "type", "none",
-                    "path", "/vmess-argo"
+                    "host", argoDomain, "path", "/vmess-argo?ed=2560", "tls", "tls",
+                    "sni", argoDomain, "alpn", "", "fp", "firefox"
             );
             nodes.add("vmess://" + Base64.getEncoder().encodeToString(toJson(vmess).getBytes(StandardCharsets.UTF_8)));
         }
@@ -588,6 +605,23 @@ public class App {
         return subText;
     }
 
+    private static Optional<String> extractDomain() {
+        if (DISABLE_ARGO) return Optional.empty();
+        if (!ARGO_AUTH.isEmpty() && !ARGO_DOMAIN.isEmpty()) {
+            log("ARGO_DOMAIN: " + ARGO_DOMAIN);
+            return Optional.of(ARGO_DOMAIN);
+        }
+        log("Waiting for quick tunnel domain in log...");
+        Optional<String> domain = waitForQuickTunnelDomain(Duration.ofSeconds(30));
+        if (domain.isEmpty()) {
+            log("Quick tunnel domain not found, retrying...");
+            try { Files.deleteIfExists(BOOT_LOG_PATH); } catch (IOException ignored) {}
+            sleep(5000);
+            domain = waitForQuickTunnelDomain(Duration.ofSeconds(30));
+        }
+        domain.ifPresentOrElse(d -> log("ArgoDomain: " + d), () -> log("ArgoDomain not found"));
+        return domain;
+    }
 
     private static Optional<String> waitForQuickTunnelDomain(Duration timeout) {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
@@ -755,19 +789,26 @@ public class App {
     }
 
     private static void cleanupOldFiles() {
-        for (String file : List.of("config.json", "config.yaml", "cert.pem", "private.key", "tunnel.json", "tunnel.yml", "list.txt", "boot.log", "sbx.so", "bot.so", "cloudflared.so", "agent.so", "v1.so")) {
+        for (String file : List.of("boot.log", "list.txt", "config.json", "config.yaml", "cert.pem", "private.key", "tunnel.json", "tunnel.yml")) {
             try { Files.deleteIfExists(RUNTIME_DIR.resolve(file)); } catch (IOException ignored) {}
         }
-        deleteDirectory(RUNTIME_DIR.resolve(".tmp"));
         deleteDirectory(ROOT.resolve(".tmp"));
     }
 
     private static void cleanupFiles(boolean keepSub) {
-        // whitelist-only cleanup: never walk the runtime dir (it must not collide with MC world data)
-        for (String file : List.of("config.json", "config.yaml", "cert.pem", "private.key", "tunnel.json", "tunnel.yml", "list.txt", "boot.log", "sbx.so", "bot.so", "cloudflared.so", "agent.so", "v1.so")) {
-            try { Files.deleteIfExists(RUNTIME_DIR.resolve(file)); } catch (IOException ignored) {}
+        try {
+            if (Files.exists(RUNTIME_DIR)) {
+                try (var stream = Files.list(RUNTIME_DIR)) {
+                    for (Path path : stream.collect(Collectors.toList())) {
+                        String name = path.getFileName().toString();
+                        if (name.equals("keypair.properties") || (keepSub && name.equals("sub.txt"))) continue;
+                        if (Files.isDirectory(path)) deleteDirectory(path); else Files.deleteIfExists(path);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log("Cleanup failed: " + e.getMessage());
         }
-        deleteDirectory(RUNTIME_DIR.resolve(".tmp"));
         deleteDirectory(ROOT.resolve(".tmp"));
     }
 
